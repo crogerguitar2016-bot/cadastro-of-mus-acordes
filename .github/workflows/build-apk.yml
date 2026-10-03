@@ -11,69 +11,112 @@ jobs:
       - name: Baixar projeto
         uses: actions/checkout@v4
 
-      - name: Configurar Python 3.11
+      - name: Configurar Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Configurar Java 17
+      - name: Configurar Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
-      - name: Instalar dependências
+      - name: Instalar dependências do sistema
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             git zip unzip wget curl autoconf libtool pkg-config \
             zlib1g-dev libncurses5-dev libtinfo6 \
             cmake libffi-dev libssl-dev automake \
-            autopoint gettext libltdl-dev \
-            build-essential ccache ninja-build
+            autopoint gettext libltdl-dev
+
+      - name: Instalar Android SDK
+        run: |
+          mkdir -p "$HOME/android-sdk/cmdline-tools/latest"
+
+          cd "$HOME/android-sdk"
+
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
+
+          unzip -q commandlinetools-linux-13114758_latest.zip
+
+          cp -r cmdline-tools/* "$HOME/android-sdk/cmdline-tools/latest/" || true
+
+          echo "ANDROIDSDK=$HOME/android-sdk" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$HOME/android-sdk" >> "$GITHUB_ENV"
+          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$HOME/android-sdk/platform-tools" >> "$GITHUB_PATH"
+
+      - name: Criar compatibilidade para o Buildozer
+        run: |
+          mkdir -p "$HOME/android-sdk/tools/bin"
+
+          ln -sf "$HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager" \
+            "$HOME/android-sdk/tools/bin/sdkmanager"
+
+          ln -sf "$HOME/android-sdk/cmdline-tools/latest/bin/avdmanager" \
+            "$HOME/android-sdk/tools/bin/avdmanager"
+
+      - name: Aceitar licenças Android
+        run: |
+          yes | sdkmanager --licenses || true
+
+      - name: Instalar componentes Android
+        run: |
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;37.0.0"
 
       - name: Instalar Rust
-        uses: dtolnay/rust-toolchain@stable
+        run: |
+          curl https://sh.rust.rs -sSf | sh -s -- -y
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
-      - name: Instalar ferramentas Python e preparar ReportLab
+      - name: Instalar dependências Python
         run: |
           python -m pip install --upgrade pip setuptools
           python -m pip install legacy-cgi
           python -m pip install "cython==0.29.34"
           python -m pip install reportlab Pillow
+
           REPORTLAB_PATH=$(python -c "import reportlab; print(reportlab.__path__[0])")
           rm -rf ./reportlab
           cp -r "$REPORTLAB_PATH" ./reportlab
           find ./reportlab -type f -name "*.so" -delete
           find ./reportlab -type f -name "*.pyd" -delete
-          echo "ReportLab copiado para o projeto:"
-          ls -ld ./reportlab
-          python -m pip install git+https://github.com/kivy/buildozer.git
 
-      - name: Instalar Android SDK
+      - name: Instalar Buildozer
         run: |
-          mkdir -p "$HOME/android-sdk/cmdline-tools"
-          cd "$HOME/android-sdk/cmdline-tools"
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
-          unzip -q commandlinetools-linux-13114758_latest.zip
-          mv cmdline-tools latest
-          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-          echo "$HOME/android-sdk/platform-tools" >> "$GITHUB_PATH"
-          yes | "$HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
-          "$HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-36" "build-tools;37.0.0"
+          python -m pip install git+https://github.com/kivy/buildozer.git
 
       - name: Preparar Python-for-Android
         run: |
-          git clone --depth 1 --branch develop https://github.com/kivy/python-for-android.git "$HOME/p4a"
+          rm -rf "$HOME/p4a"
+          git clone --depth 1 --branch develop \
+            https://github.com/kivy/python-for-android.git \
+            "$HOME/p4a"
 
-      - name: Compilar APK
+      - name: Configurar Buildozer para usar P4A preparado
+        run: |
+          cat >> buildozer.spec <<'SPEC'
+
+          p4a.source_dir = /home/runner/p4a
+          SPEC
+
+      - name: Limpar build anterior
+        run: |
+          rm -rf .buildozer
+          rm -rf bin
+
+      - name: Gerar APK
         env:
-          ANDROIDSDK: /home/runner/android-sdk
-          ANDROID_HOME: /home/runner/android-sdk
+          P4A_ACCEPT_LICENSE: "1"
         run: |
           buildozer -v android debug
 
-      - name: Publicar APK
+      - name: Enviar APK
         uses: actions/upload-artifact@v4
         with:
           name: APK-Cadastro-Of-Mus-Acordes
