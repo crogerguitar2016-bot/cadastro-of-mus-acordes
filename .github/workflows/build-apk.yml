@@ -25,7 +25,12 @@ jobs:
       - name: Instalar dependências
         run: |
           sudo apt-get update
-          sudo apt-get install -y git zip unzip wget curl autoconf automake libtool pkg-config build-essential ccache libffi-dev libssl-dev zlib1g-dev libncurses5-dev libncursesw5-dev cmake ninja-build
+          sudo apt-get install -y \
+            git zip unzip wget curl autoconf libtool pkg-config \
+            zlib1g-dev libncurses5-dev libtinfo6 \
+            cmake libffi-dev libssl-dev automake \
+            autopoint gettext libltdl-dev \
+            build-essential ccache ninja-build
 
       - name: Instalar Rust
         uses: dtolnay/rust-toolchain@stable
