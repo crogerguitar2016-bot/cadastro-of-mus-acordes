@@ -1024,9 +1024,9 @@ class CadastroPlanilha(BoxLayout):
         create = Button(text="CRIAR BACKUP", size_hint_y=None, height=dp(54))
         create_share = Button(text="CRIAR E COMPARTILHAR / NUVEM", size_hint_y=None, height=dp(54))
         restore_external = Button(text="RESTAURAR BACKUP DO CELULAR", size_hint_y=None, height=dp(54))
-        restore_latest = Button(text="RESTAURAR ÚLTIMO BACKUP INTERNO", size_hint_y=None, height=dp(54))
+        restore_latest_btn = Button(text="RESTAURAR ÚLTIMO BACKUP INTERNO", size_hint_y=None, height=dp(54))
         close = Button(text="FECHAR", size_hint_y=None, height=dp(50))
-        for btn in (create, create_share, restore_external, restore_latest, close):
+        for btn in (create, create_share, restore_external, restore_latest_btn, close):
             root.add_widget(btn)
         popup = Popup(title="Backup", content=root, size_hint=(0.94, 0.84), auto_dismiss=False)
         close.bind(on_release=popup.dismiss)
@@ -1048,7 +1048,7 @@ class CadastroPlanilha(BoxLayout):
             except Exception as exc:
                 self.message("Backup", str(exc))
 
-        def restore_latest(*_):
+        def restore_latest_action(*_):
             backups = sorted(self.store.backups_dir.glob("*.zip"), key=lambda p: p.stat().st_mtime, reverse=True)
             if not backups:
                 self.message("Restaurar", "Nenhum backup interno encontrado.")
@@ -1057,7 +1057,7 @@ class CadastroPlanilha(BoxLayout):
 
         create.bind(on_release=make)
         create_share.bind(on_release=make_share)
-        restore_latest.bind(on_release=restore_latest)
+        restore_latest_btn.bind(on_release=restore_latest_action)
         restore_external.bind(on_release=lambda *_: self._pick_backup())
         popup.open()
 
