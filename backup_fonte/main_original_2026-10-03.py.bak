@@ -1,0 +1,3754 @@
+import json
+import csv
+from pathlib import Path
+
+from kivy.app import App
+from kivy.metrics import dp
+
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.gridlayout import GridLayout
+from kivy.uix.button import Button
+from kivy.uix.label import Label
+from kivy.uix.popup import Popup
+from kivy.uix.textinput import TextInput
+
+
+NOME_APP = 'Cadastro Acordes'
+MODELO = 'Cadastro/Planilha'
+MODULOS = ['Cadastros', 'Tabelas', 'Campos personalizados', 'Filtros', 'Relatórios', 'Exportação']
+
+
+def obter_pasta_dados_app():
+    nome_pasta_app = "".join(
+        caractere
+        if caractere.isalnum()
+        else "_"
+        for caractere in NOME_APP
+    ).strip("_").lower()
+
+    pasta = (
+        Path(
+            App.get_running_app().user_data_dir
+        )
+        / nome_pasta_app
+    )
+
+    pasta.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    return pasta
+
+
+class CadastroPlanilha(BoxLayout):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        self.orientation = "vertical"
+        self.spacing = dp(8)
+        self.padding = dp(10)
+
+        pasta_dados = obter_pasta_dados_app()
+
+        pasta_dados.mkdir(
+            parents=True,
+            exist_ok=True
+        )
+
+        self.arquivo_cadastros = (
+            pasta_dados / "cadastros.json"
+        )
+
+        self.arquivo_campos = (
+            pasta_dados / "campos.json"
+        )
+
+        self.pagina_cadastros = 0
+        self.pagina_campos = 0
+        self.pagina_tabela = 0
+        self.indice_colunas_tabela = 0
+        self.pagina_filtros = 0
+
+        self.add_widget(
+            Label(
+                text=NOME_APP,
+                size_hint_y=None,
+                height=dp(45),
+                font_size="22sp"
+            )
+        )
+
+        self.add_widget(
+            Label(
+                text=MODELO,
+                size_hint_y=None,
+                height=dp(32),
+                font_size="15sp"
+            )
+        )
+
+        grade = GridLayout(
+            cols=2,
+            spacing=dp(8),
+            size_hint_y=None,
+            row_default_height=dp(62),
+            row_force_default=True
+        )
+
+        grade.bind(
+            minimum_height=grade.setter("height")
+        )
+
+        for modulo in MODULOS:
+            botao = Button(
+                text=modulo,
+                font_size="15sp"
+            )
+
+            botao.bind(
+                on_release=lambda b:
+                self.selecionar_modulo(
+                    b.text
+                )
+            )
+
+            grade.add_widget(botao)
+
+        self.add_widget(grade)
+
+        self.status = Label(
+            text="Aplicativo pronto.",
+            size_hint_y=None,
+            height=dp(45)
+        )
+
+        self.add_widget(self.status)
+
+    def selecionar_modulo(self, modulo):
+        if modulo == "Cadastros":
+            self.abrir_cadastros()
+            return
+
+        if modulo == "Campos personalizados":
+            self.abrir_campos_personalizados()
+            return
+
+        if modulo == "Tabelas":
+            self.abrir_tabelas()
+            return
+
+        if modulo == "Filtros":
+            self.abrir_filtros()
+            return
+
+        if modulo == "Relatórios":
+            self.abrir_relatorios()
+            return
+
+        if modulo == "Exportação":
+            self.abrir_exportacao()
+            return
+
+        self.status.text = (
+            "Módulo selecionado: "
+            + modulo
+        )
+
+
+    def pasta_exportacao(self):
+        pasta = (
+            obter_pasta_dados_app()
+            / "exports"
+        )
+
+        pasta.mkdir(
+            parents=True,
+            exist_ok=True
+        )
+
+        return pasta
+
+    def nome_seguro_arquivo(self, nome):
+        permitido = []
+
+        for caractere in nome:
+            if (
+                caractere.isalnum()
+                or caractere in (
+                    "-",
+                    "_",
+                    " ",
+                )
+            ):
+                permitido.append(
+                    caractere
+                )
+
+        resultado = "".join(
+            permitido
+        ).strip()
+
+        resultado = resultado.replace(
+            " ",
+            "_"
+        )
+
+        return (
+            resultado
+            or "cadastros"
+        )
+
+    def gerar_csv_cadastros(self):
+        cadastros = (
+            self.carregar_cadastros()
+        )
+
+        campos = [
+            campo
+            for campo in self.carregar_campos()
+            if campo.get(
+                "status",
+                "Ativo"
+            ) == "Ativo"
+        ]
+
+        nome_app = (
+            App.get_running_app().title
+            or NOME_APP
+        )
+
+        nome_arquivo = (
+            self.nome_seguro_arquivo(
+                nome_app
+            )
+            + "_cadastros.csv"
+        )
+
+        destino = (
+            self.pasta_exportacao()
+            / nome_arquivo
+        )
+
+        cabecalho = [
+            "Nome",
+            "Contato",
+            "Combo",
+            "Status",
+            "Observações",
+        ]
+
+        for campo in campos:
+            cabecalho.append(
+                campo.get(
+                    "nome",
+                    ""
+                )
+            )
+
+        with destino.open(
+            "w",
+            encoding="utf-8-sig",
+            newline=""
+        ) as arquivo:
+
+            escritor = csv.writer(
+                arquivo,
+                delimiter=";",
+                quoting=csv.QUOTE_MINIMAL
+            )
+
+            escritor.writerow(
+                cabecalho
+            )
+
+            for cadastro in cadastros:
+                linha = [
+                    cadastro.get(
+                        "nome",
+                        ""
+                    ),
+
+                    cadastro.get(
+                        "contato",
+                        ""
+                    ),
+
+                    cadastro.get(
+                        "grupo",
+                        ""
+                    ),
+
+                    cadastro.get(
+                        "status",
+                        "Ativo"
+                    ),
+
+                    cadastro.get(
+                        "observacoes",
+                        ""
+                    ),
+                ]
+
+                valores = cadastro.get(
+                    "campos",
+                    {}
+                )
+
+                if not isinstance(
+                    valores,
+                    dict
+                ):
+                    valores = {}
+
+                for campo in campos:
+                    linha.append(
+                        valores.get(
+                            str(
+                                campo.get("id")
+                            ),
+                            ""
+                        )
+                    )
+
+                escritor.writerow(
+                    linha
+                )
+
+        return destino
+
+    def abrir_exportacao(self):
+        caixa = BoxLayout(
+            orientation="vertical",
+            spacing=dp(12),
+            padding=dp(14)
+        )
+
+        caixa.add_widget(
+            Label(
+                text="EXPORTAÇÃO",
+                size_hint_y=None,
+                height=dp(45),
+                font_size="20sp"
+            )
+        )
+
+        resumo = Label(
+            text=(
+                "O arquivo CSV incluirá:\n"
+                "Nome, Contato, Combo, Status,\n"
+                "Observações e campos personalizados."
+            )
+        )
+
+        caixa.add_widget(
+            resumo
+        )
+
+        exportar = Button(
+            text="EXPORTAR CSV",
+            size_hint_y=None,
+            height=dp(65)
+        )
+
+        caixa.add_widget(
+            exportar
+        )
+
+        aviso = Label(
+            text="",
+            size_hint_y=None,
+            height=dp(90)
+        )
+
+        caixa.add_widget(
+            aviso
+        )
+
+        fechar = Button(
+            text="FECHAR",
+            size_hint_y=None,
+            height=dp(50)
+        )
+
+        caixa.add_widget(
+            fechar
+        )
+
+        popup = Popup(
+            title="Exportação",
+            content=caixa,
+            size_hint=(0.92, 0.78),
+            auto_dismiss=False
+        )
+
+        def executar(*_):
+            try:
+                destino = (
+                    self.gerar_csv_cadastros()
+                )
+
+                aviso.text = (
+                    "CSV criado com sucesso:\n"
+                    + str(destino)
+                )
+
+                self.status.text = (
+                    "CSV exportado com sucesso."
+                )
+
+            except Exception as erro:
+                aviso.text = (
+                    "Erro ao exportar:\n"
+                    + str(erro)
+                )
+
+        exportar.bind(
+            on_release=executar
+        )
+
+        fechar.bind(
+            on_release=popup.dismiss
+        )
+
+        popup.open()
+
+    def calcular_resumo_relatorio(self):
+        cadastros = self.carregar_cadastros()
+
+        ativos = sum(
+            1
+            for item in cadastros
+            if item.get(
+                "status",
+                "Ativo"
+            ) == "Ativo"
+        )
+
+        inativos = (
+            len(cadastros)
+            - ativos
+        )
+
+        combos_validos = {
+            "Violão",
+            "Guitarra",
+            "Contrabaixo",
+            "Teclado",
+            "Bateria",
+        }
+
+        combos_em_uso = set()
+
+        for item in cadastros:
+            combo = item.get(
+                "grupo",
+                ""
+            ).strip()
+
+            if combo in combos_validos:
+                combos_em_uso.add(combo)
+
+        return {
+            "total": len(cadastros),
+            "ativos": ativos,
+            "inativos": inativos,
+            "combos": len(combos_em_uso),
+        }
+
+    def calcular_combos_relatorio(self):
+        cadastros = self.carregar_cadastros()
+
+        nomes = [
+            "Violão",
+            "Guitarra",
+            "Contrabaixo",
+            "Teclado",
+            "Bateria",
+        ]
+
+        contagem = {
+            nome: 0
+            for nome in nomes
+        }
+
+        sem_combo = 0
+
+        for item in cadastros:
+            combo = item.get(
+                "grupo",
+                ""
+            ).strip()
+
+            if combo in contagem:
+                contagem[combo] += 1
+            else:
+                sem_combo += 1
+
+        resultado = [
+            (
+                nome,
+                contagem[nome]
+            )
+            for nome in nomes
+        ]
+
+        if sem_combo:
+            resultado.append(
+                (
+                    "Sem combo",
+                    sem_combo
+                )
+            )
+
+        return resultado
+
+    def calcular_campos_relatorio(self):
+        cadastros = self.carregar_cadastros()
+
+        campos = [
+            campo
+            for campo in self.carregar_campos()
+            if campo.get(
+                "status",
+                "Ativo"
+            ) == "Ativo"
+        ]
+
+        resultado = []
+
+        for campo in campos:
+            chave = str(
+                campo.get("id")
+            )
+
+            preenchidos = 0
+
+            for cadastro in cadastros:
+                valores = cadastro.get(
+                    "campos",
+                    {}
+                )
+
+                if not isinstance(
+                    valores,
+                    dict
+                ):
+                    continue
+
+                valor = valores.get(
+                    chave,
+                    ""
+                )
+
+                if str(valor).strip():
+                    preenchidos += 1
+
+            resultado.append({
+                "nome":
+                    campo.get(
+                        "nome",
+                        ""
+                    ),
+
+                "tipo":
+                    campo.get(
+                        "tipo",
+                        "Texto"
+                    ),
+
+                "preenchidos":
+                    preenchidos,
+
+                "total":
+                    len(cadastros),
+            })
+
+        return resultado
+
+    def abrir_relatorios(self):
+        caixa = BoxLayout(
+            orientation="vertical",
+            spacing=dp(12),
+            padding=dp(14)
+        )
+
+        caixa.add_widget(
+            Label(
+                text="RELATÓRIOS",
+                size_hint_y=None,
+                height=dp(45),
+                font_size="20sp"
+            )
+        )
+
+        resumo = Button(
+            text="RESUMO GERAL",
+            size_hint_y=None,
+            height=dp(65)
+        )
+
+        combos = Button(
+            text="COMBOS",
+            size_hint_y=None,
+            height=dp(65)
+        )
+
+        campos = Button(
+            text="CAMPOS PERSONALIZADOS",
+            size_hint_y=None,
+            height=dp(65)
+        )
+
+        fechar = Button(
+            text="FECHAR",
+            size_hint_y=None,
+            height=dp(50)
+        )
+
+        caixa.add_widget(resumo)
+        caixa.add_widget(combos)
+        caixa.add_widget(campos)
+        caixa.add_widget(fechar)
+
+        popup = Popup(
+            title="Relatórios",
+            content=caixa,
+            size_hint=(0.90, 0.72),
+            auto_dismiss=False
+        )
+
+        resumo.bind(
+            on_release=lambda *_:
+            self.mostrar_resumo_relatorio()
+        )
+
+        combos.bind(
+            on_release=lambda *_:
+            self.mostrar_combos_relatorio()
+        )
+
+        campos.bind(
+            on_release=lambda *_:
+            self.mostrar_campos_relatorio()
+        )
+
+        fechar.bind(
+            on_release=popup.dismiss
+        )
+
+        popup.open()
+
+    def mostrar_resumo_relatorio(self):
+        dados = (
+            self.calcular_resumo_relatorio()
+        )
+
+        caixa = BoxLayout(
+            orientation="vertical",
+            spacing=dp(10),
+            padding=dp(14)
+        )
+
+        caixa.add_widget(
+            Label(
+                text="RESUMO GERAL",
+                size_hint_y=None,
+                height=dp(42),
+                font_size="19sp"
+            )
+        )
+
+        itens = [
+            (
+                "Total de cadastros",
+                dados["total"]
+            ),
+            (
+                "Ativos",
+                dados["ativos"]
+            ),
+            (
+                "Inativos",
+                dados["inativos"]
+            ),
+            (
+                "Combos em uso",
+                dados["combos"]
+            ),
+        ]
+
+        for nome, valor in itens:
+            caixa.add_widget(
+                Label(
+                    text=(
+                        nome
+                        + ": "
+                        + str(valor)
+                    ),
+                    size_hint_y=None,
+                    height=dp(45),
+                    font_size="17sp"
+                )
+            )
+
+        fechar = Button(
+            text="FECHAR",
+            size_hint_y=None,
+            height=dp(50)
+        )
+
+        caixa.add_widget(fechar)
+
+        popup = Popup(
+            title="Resumo",
+            content=caixa,
+            size_hint=(0.88, 0.72),
+            auto_dismiss=False
+        )
+
+        fechar.bind(
+            on_release=popup.dismiss
+        )
+
+        popup.open()
+
+    def mostrar_combos_relatorio(self):
+        combos = (
+            self.calcular_combos_relatorio()
+        )
+
+        caixa = BoxLayout(
+            orientation="vertical",
+            spacing=dp(7),
+            padding=dp(10)
+        )
+
+        titulo = Label(
+            text="COMBOS",
+            size_hint_y=None,
+            height=dp(38),
+            font_size="18sp"
+        )
+
+        caixa.add_widget(titulo)
+
+        lista = BoxLayout(
+            orientation="vertical",
+            spacing=dp(6)
+        )
+
+        caixa.add_widget(lista)
+
+        navegacao = BoxLayout(
+            spacing=dp(7),
+            size_hint_y=None,
+            height=dp(48)
+        )
+
+        anterior = Button(
+            text="ANTERIOR"
+        )
+
+        proximo = Button(
+            text="PRÓXIMO"
+        )
+
+        navegacao.add_widget(anterior)
+        navegacao.add_widget(proximo)
+
+        caixa.add_widget(navegacao)
+
+        fechar = Button(
+            text="FECHAR",
+            size_hint_y=None,
+            height=dp(48)
+        )
+
+        caixa.add_widget(fechar)
+
+        popup = Popup(
+            title="Combos",
+            content=caixa,
+            size_hint=(0.92, 0.86),
+            auto_dismiss=False
+        )
+
+        pagina = {
+            "numero": 0
+        }
+
+        def atualizar():
+            lista.clear_widgets()
+
+            por_pagina = 4
+
+            total_paginas = max(
+                1,
+                (
+                    len(combos)
+                    + por_pagina - 1
+                ) // por_pagina
+            )
+
+            if (
+                pagina["numero"]
+                >= total_paginas
+            ):
+                pagina["numero"] = (
+                    total_paginas - 1
+                )
+
+            inicio = (
+                pagina["numero"]
+                * por_pagina
+            )
+
+            fim = inicio + por_pagina
+
+            atual = combos[
+                inicio:fim
+            ]
+
+            for nome, quantidade in atual:
+                lista.add_widget(
+                    Label(
+                        text=(
+                            nome
+                            + ": "
+                            + str(quantidade)
+                        ),
+                        size_hint_y=None,
+                        height=dp(60),
+                        font_size="17sp"
+                    )
+                )
+
+            titulo.text = (
+                "COMBOS  "
+                + str(
+                    pagina["numero"] + 1
+                )
+                + "/"
+                + str(total_paginas)
+            )
+
+        def voltar(*_):
+            if pagina["numero"] > 0:
+                pagina["numero"] -= 1
+                atualizar()
+
+        def avancar(*_):
+            total_paginas = max(
+                1,
+                (
+                    len(combos) + 3
+                ) // 4
+            )
+
+            if (
+                pagina["numero"] + 1
+                < total_paginas
+            ):
+                pagina["numero"] += 1
+                atualizar()
+
+        anterior.bind(
+            on_release=voltar
+        )
+
+        proximo.bind(
+            on_release=avancar
+        )
+
+        fechar.bind(
+            on_release=popup.dismiss
+        )
+
+        atualizar()
+        popup.open()
+
+    def mostrar_campos_relatorio(self):
+        campos = (
+            self.calcular_campos_relatorio()
+        )
+
+        caixa = BoxLayout(
+            orientation="vertical",
+            spacing=dp(7),
+            padding=dp(10)
+        )
+
+        titulo = Label(
+            text="CAMPOS",
+            size_hint_y=None,
+            height=dp(38),
+            font_size="18sp"
+        )
+
+        caixa.add_widget(titulo)
+
+        lista = BoxLayout(
+            orientation="vertical",
+            spacing=dp(6)
+        )
+
+        caixa.add_widget(lista)
+
+        navegacao = BoxLayout(
+            spacing=dp(7),
+            size_hint_y=None,
+            height=dp(48)
+        )
+
+        anterior = Button(
+            text="ANTERIOR"
+        )
+
+        proximo = Button(
+            text="PRÓXIMO"
+        )
+
+        navegacao.add_widget(anterior)
+        navegacao.add_widget(proximo)
+
+        caixa.add_widget(navegacao)
+
+        fechar = Button(
+            text="FECHAR",
+            size_hint_y=None,
+            height=dp(48)
+        )
+
+        caixa.add_widget(fechar)
+
+        popup = Popup(
+            title="Campos personalizados",
+            content=caixa,
+            size_hint=(0.92, 0.86),
+            auto_dismiss=False
+        )
+
+        pagina = {
+            "numero": 0
+        }
+
+        def atualizar():
+            lista.clear_widgets()
+
+            por_pagina = 4
+
+            total_paginas = max(
+                1,
+                (
+                    len(campos)
+                    + por_pagina - 1
+                ) // por_pagina
+            )
+
+            if (
+                pagina["numero"]
+                >= total_paginas
+            ):
+                pagina["numero"] = (
+                    total_paginas - 1
+                )
+
+            inicio = (
+                pagina["numero"]
+                * por_pagina
+            )
+
+            fim = inicio + por_pagina
+
+            atual = campos[
+                inicio:fim
+            ]
+
+            if not atual:
+                lista.add_widget(
+                    Label(
+                        text=(
+                            "Nenhum campo personalizado ativo."
+                        )
+                    )
+                )
+
+            for campo in atual:
+                lista.add_widget(
+                    Label(
+                        text=(
+                            campo["nome"]
+                            + " - "
+                            + campo["tipo"]
+                            + "\n"
+                            + str(
+                                campo["preenchidos"]
+                            )
+                            + " de "
+                            + str(
+                                campo["total"]
+                            )
+                            + " preenchidos"
+                        ),
+                        size_hint_y=None,
+                        height=dp(65)
+                    )
+                )
+
+            titulo.text = (
+                "CAMPOS  "
+                + str(
+                    pagina["numero"] + 1
+                )
+                + "/"
+                + str(total_paginas)
+            )
+
+        def voltar(*_):
+            if pagina["numero"] > 0:
+                pagina["numero"] -= 1
+                atualizar()
+
+        def avancar(*_):
+            total_paginas = max(
+                1,
+                (
+                    len(campos) + 3
+                ) // 4
+            )
+
+            if (
+                pagina["numero"] + 1
+                < total_paginas
+            ):
+                pagina["numero"] += 1
+                atualizar()
+
+        anterior.bind(
+            on_release=voltar
+        )
+
+        proximo.bind(
+            on_release=avancar
+        )
+
+        fechar.bind(
+            on_release=popup.dismiss
+        )
+
+        atualizar()
+        popup.open()
+
+    def escolher_campo_filtro(
+        self,
+        ao_escolher
+    ):
+        campos = [
+            campo
+            for campo in self.carregar_campos()
+            if campo.get(
+                "status",
+                "Ativo"
+            ) == "Ativo"
+        ]
+
+        if not campos:
+            self.status.text = (
+                "Nenhum campo personalizado ativo."
+            )
+            return
+
+        caixa = BoxLayout(
+            orientation="vertical",
+            spacing=dp(7),
+            padding=dp(10)
+        )
+
+        titulo = Label(
+            text="ESCOLHER CAMPO",
+            size_hint_y=None,
+            height=dp(35),
+            font_size="17sp"
+        )
+
+        caixa.add_widget(titulo)
+
+        lista = BoxLayout(
+            orientation="vertical",
+            spacing=dp(6)
+        )
+
+        caixa.add_widget(lista)
+
+        navegacao = BoxLayout(
+            spacing=dp(7),
+            size_hint_y=None,
+            height=dp(48)
+        )
+
+        anterior = Button(
+            text="ANTERIOR"
+        )
+
+        proximo = Button(
+            text="PRÓXIMO"
+        )
+
+        navegacao.add_widget(anterior)
+        navegacao.add_widget(proximo)
+
+        caixa.add_widget(navegacao)
+
+        cancelar = Button(
+            text="CANCELAR",
+            size_hint_y=None,
+            height=dp(46)
+        )
+
+        caixa.add_widget(cancelar)
+
+        popup = Popup(
+            title="Campo personalizado",
+            content=caixa,
+            size_hint=(0.92, 0.82),
+            auto_dismiss=False
+        )
+
+        pagina = {
+            "numero": 0
+        }
+
+        def selecionar(campo):
+            ao_escolher(campo)
+            popup.dismiss()
+
+        def atualizar():
+            lista.clear_widgets()
+
+            por_pagina = 4
+
+            total_paginas = max(
+                1,
+                (
+                    len(campos)
+                    + por_pagina - 1
+                ) // por_pagina
+            )
+
+            inicio = (
+                pagina["numero"]
+                * por_pagina
+            )
+
+            fim = inicio + por_pagina
+
+            for campo in campos[
+                inicio:fim
+            ]:
+                botao = Button(
+                    text=(
+                        campo.get(
+                            "nome",
+                            ""
+                        )
+                        + "\n"
+                        + campo.get(
+                            "tipo",
+                            "Texto"
+                        )
+                    ),
+                    size_hint_y=None,
+                    height=dp(60)
+                )
+
+                botao.bind(
+                    on_release=lambda _b, c=campo:
+                    selecionar(c)
+                )
+
+                lista.add_widget(botao)
+
+            titulo.text = (
+                "CAMPO  "
+                + str(
+                    pagina["numero"] + 1
+                )
+                + "/"
+                + str(total_paginas)
+            )
+
+        def voltar(*_):
+            if pagina["numero"] > 0:
+                pagina["numero"] -= 1
+                atualizar()
+
+        def avancar(*_):
+            total_paginas = max(
+                1,
+                (
+                    len(campos) + 3
+                ) // 4
+            )
+
+            if (
+                pagina["numero"] + 1
+                < total_paginas
+            ):
+                pagina["numero"] += 1
+                atualizar()
+
+        anterior.bind(
+            on_release=voltar
+        )
+
+        proximo.bind(
+            on_release=avancar
+        )
+
+        cancelar.bind(
+            on_release=popup.dismiss
+        )
+
+        atualizar()
+        popup.open()
+
+    def filtrar_cadastros(
+        self,
+        filtros
+    ):
+        cadastros = self.carregar_cadastros()
+
+        nome = filtros.get(
+            "nome",
+            ""
+        ).strip().lower()
+
+        grupo = filtros.get(
+            "grupo",
+            ""
+        ).strip().lower()
+
+        status = filtros.get(
+            "status",
+            "Todos"
+        )
+
+        campo = filtros.get(
+            "campo"
+        )
+
+        valor_campo = filtros.get(
+            "valor_campo",
+            ""
+        ).strip().lower()
+
+        resultado = []
+
+        for cadastro in cadastros:
+            if nome:
+                if nome not in cadastro.get(
+                    "nome",
+                    ""
+                ).lower():
+                    continue
+
+            if grupo:
+                if grupo not in cadastro.get(
+                    "grupo",
+                    ""
+                ).lower():
+                    continue
+
+            if status != "Todos":
+                if cadastro.get(
+                    "status",
+                    "Ativo"
+                ) != status:
+                    continue
+
+            if campo is not None and valor_campo:
+                valores = cadastro.get(
+                    "campos",
+                    {}
+                )
+
+                if not isinstance(
+                    valores,
+                    dict
+                ):
+                    valores = {}
+
+                valor = str(
+                    valores.get(
+                        str(campo.get("id")),
+                        ""
+                    )
+                ).lower()
+
+                if valor_campo not in valor:
+                    continue
+
+            resultado.append(
+                cadastro
+            )
+
+        return resultado
+
+    def abrir_filtros(self):
+        caixa = BoxLayout(
+            orientation="vertical",
+            spacing=dp(7),
+            padding=dp(10)
+        )
+
+        nome = TextInput(
+            hint_text="Nome contém...",
+            multiline=False,
+            size_hint_y=None,
+            height=dp(48)
+        )
+
+        grupo = TextInput(
+            hint_text="Combo contém...",
+            multiline=False,
+            size_hint_y=None,
+            height=dp(48)
+        )
+
+        caixa.add_widget(nome)
+        caixa.add_widget(grupo)
+
+        status = {
+            "valor": "Todos"
+        }
+
+        status_label = Label(
+            text="Status: Todos",
+            size_hint_y=None,
+            height=dp(28)
+        )
+
+        linha_status = BoxLayout(
+            spacing=dp(5),
+            size_hint_y=None,
+            height=dp(48)
+        )
+
+        todos = Button(
+            text="TODOS"
+        )
+
+        ativos = Button(
+            text="ATIVOS"
+        )
+
+        inativos = Button(
+            text="INATIVOS"
+        )
+
+        linha_status.add_widget(todos)
+        linha_status.add_widget(ativos)
+        linha_status.add_widget(inativos)
+
+        caixa.add_widget(linha_status)
+        caixa.add_widget(status_label)
+
+        campo_escolhido = {
+            "valor": None
+        }
+
+        campo_label = TextInput(
+            hint_text="Campo personalizado opcional",
+            readonly=True,
+            multiline=False,
+            size_hint_y=None,
+            height=dp(48)
+        )
+
+        escolher_campo = Button(
+            text="ESCOLHER CAMPO",
+            size_hint_y=None,
+            height=dp(46)
+        )
+
+        valor_campo = TextInput(
+            hint_text="Valor do campo personalizado",
+            multiline=False,
+            size_hint_y=None,
+            height=dp(48)
+        )
+
+        caixa.add_widget(campo_label)
+        caixa.add_widget(escolher_campo)
+        caixa.add_widget(valor_campo)
+
+        aplicar = Button(
+            text="APLICAR FILTRO",
+            size_hint_y=None,
+            height=dp(50)
+        )
+
+        fechar = Button(
+            text="FECHAR",
+            size_hint_y=None,
+            height=dp(48)
+        )
+
+        caixa.add_widget(aplicar)
+        caixa.add_widget(fechar)
+
+        popup = Popup(
+            title="Filtros",
+            content=caixa,
+            size_hint=(0.94, 0.94),
+            auto_dismiss=False
+        )
+
+        def escolher_status(valor):
+            status["valor"] = valor
+
+            status_label.text = (
+                "Status: "
+                + valor
+            )
+
+        todos.bind(
+            on_release=lambda *_:
+            escolher_status("Todos")
+        )
+
+        ativos.bind(
+            on_release=lambda *_:
+            escolher_status("Ativo")
+        )
+
+        inativos.bind(
+            on_release=lambda *_:
+            escolher_status("Inativo")
+        )
+
+        def recebeu_campo(campo):
+            campo_escolhido[
+                "valor"
+            ] = campo
+
+            campo_label.text = (
+                campo.get(
+                    "nome",
+                    ""
+                )
+            )
+
+        escolher_campo.bind(
+            on_release=lambda *_:
+            self.escolher_campo_filtro(
+                recebeu_campo
+            )
+        )
+
+        fechar.bind(
+            on_release=popup.dismiss
+        )
+
+        def executar(*_):
+            filtros = {
+                "nome":
+                    nome.text,
+
+                "grupo":
+                    grupo.text,
+
+                "status":
+                    status["valor"],
+
+                "campo":
+                    campo_escolhido[
+                        "valor"
+                    ],
+
+                "valor_campo":
+                    valor_campo.text,
+            }
+
+            resultado = (
+                self.filtrar_cadastros(
+                    filtros
+                )
+            )
+
+            popup.dismiss()
+
+            self.pagina_filtros = 0
+
+            self.mostrar_resultados_filtro(
+                resultado
+            )
+
+        aplicar.bind(
+            on_release=executar
+        )
+
+        popup.open()
+
+    def mostrar_resultados_filtro(
+        self,
+        resultados
+    ):
+        caixa = BoxLayout(
+            orientation="vertical",
+            spacing=dp(7),
+            padding=dp(10)
+        )
+
+        titulo = Label(
+            text="RESULTADOS",
+            size_hint_y=None,
+            height=dp(38),
+            font_size="18sp"
+        )
+
+        caixa.add_widget(titulo)
+
+        lista = BoxLayout(
+            orientation="vertical",
+            spacing=dp(6)
+        )
+
+        caixa.add_widget(lista)
+
+        navegacao = BoxLayout(
+            spacing=dp(7),
+            size_hint_y=None,
+            height=dp(48)
+        )
+
+        anterior = Button(
+            text="ANTERIOR"
+        )
+
+        proximo = Button(
+            text="PRÓXIMO"
+        )
+
+        navegacao.add_widget(anterior)
+        navegacao.add_widget(proximo)
+
+        caixa.add_widget(navegacao)
+
+        fechar = Button(
+            text="FECHAR",
+            size_hint_y=None,
+            height=dp(48)
+        )
+
+        caixa.add_widget(fechar)
+
+        popup = Popup(
+            title="Resultados do filtro",
+            content=caixa,
+            size_hint=(0.94, 0.90),
+            auto_dismiss=False
+        )
+
+        def atualizar():
+            lista.clear_widgets()
+
+            por_pagina = 4
+
+            total_paginas = max(
+                1,
+                (
+                    len(resultados)
+                    + por_pagina - 1
+                ) // por_pagina
+            )
+
+            if (
+                self.pagina_filtros
+                >= total_paginas
+            ):
+                self.pagina_filtros = (
+                    total_paginas - 1
+                )
+
+            inicio = (
+                self.pagina_filtros
+                * por_pagina
+            )
+
+            fim = inicio + por_pagina
+
+            pagina = resultados[
+                inicio:fim
+            ]
+
+            if not pagina:
+                lista.add_widget(
+                    Label(
+                        text=(
+                            "Nenhum registro encontrado."
+                        )
+                    )
+                )
+
+            for cadastro in pagina:
+                botao = Button(
+                    text=(
+                        cadastro.get(
+                            "nome",
+                            ""
+                        )
+                        + " - "
+                        + cadastro.get(
+                            "status",
+                            "Ativo"
+                        )
+                        + "\n"
+                        + cadastro.get(
+                            "grupo",
+                            ""
+                        )
+                    ),
+                    size_hint_y=None,
+                    height=dp(65)
+                )
+
+                botao.bind(
+                    on_release=lambda _b, c=cadastro:
+                    self.visualizar_cadastro(
+                        c,
+                        atualizar
+                    )
+                )
+
+                lista.add_widget(botao)
+
+            titulo.text = (
+                "RESULTADOS  "
+                + str(
+                    self.pagina_filtros + 1
+                )
+                + "/"
+                + str(total_paginas)
+                + "   Total: "
+                + str(len(resultados))
+            )
+
+        def voltar(*_):
+            if self.pagina_filtros > 0:
+                self.pagina_filtros -= 1
+                atualizar()
+
+        def avancar(*_):
+            total_paginas = max(
+                1,
+                (
+                    len(resultados) + 3
+                ) // 4
+            )
+
+            if (
+                self.pagina_filtros + 1
+                < total_paginas
+            ):
+                self.pagina_filtros += 1
+                atualizar()
+
+        anterior.bind(
+            on_release=voltar
+        )
+
+        proximo.bind(
+            on_release=avancar
+        )
+
+        fechar.bind(
+            on_release=popup.dismiss
+        )
+
+        atualizar()
+        popup.open()
+
+    def valor_campo_tabela(
+        self,
+        cadastro,
+        campo
+    ):
+        valores = cadastro.get(
+            "campos",
+            {}
+        )
+
+        if not isinstance(
+            valores,
+            dict
+        ):
+            return ""
+
+        return str(
+            valores.get(
+                str(campo.get("id")),
+                ""
+            )
+        )
+
+    def abrir_tabelas(self):
+        caixa = BoxLayout(
+            orientation="vertical",
+            spacing=dp(6),
+            padding=dp(8)
+        )
+
+        titulo = Label(
+            text="TABELA",
+            size_hint_y=None,
+            height=dp(38),
+            font_size="17sp"
+        )
+
+        caixa.add_widget(titulo)
+
+        cabecalho = GridLayout(
+            cols=3,
+            spacing=dp(3),
+            size_hint_y=None,
+            height=dp(42)
+        )
+
+        caixa.add_widget(
+            cabecalho
+        )
+
+        linhas = BoxLayout(
+            orientation="vertical",
+            spacing=dp(4)
+        )
+
+        caixa.add_widget(
+            linhas
+        )
+
+        navegacao = BoxLayout(
+            spacing=dp(5),
+            size_hint_y=None,
+            height=dp(50)
+        )
+
+        anterior = Button(
+            text="ANTERIOR"
+        )
+
+        colunas = Button(
+            text="COLUNAS"
+        )
+
+        proximo = Button(
+            text="PRÓXIMO"
+        )
+
+        navegacao.add_widget(
+            anterior
+        )
+
+        navegacao.add_widget(
+            colunas
+        )
+
+        navegacao.add_widget(
+            proximo
+        )
+
+        caixa.add_widget(
+            navegacao
+        )
+
+        fechar = Button(
+            text="FECHAR",
+            size_hint_y=None,
+            height=dp(48)
+        )
+
+        caixa.add_widget(
+            fechar
+        )
+
+        popup = Popup(
+            title="Tabela",
+            content=caixa,
+            size_hint=(0.98, 0.92),
+            auto_dismiss=False
+        )
+
+        def obter_modos():
+            campos_ativos = [
+                campo
+                for campo
+                in self.carregar_campos()
+                if campo.get(
+                    "status",
+                    "Ativo"
+                ) == "Ativo"
+            ]
+
+            modos = [
+                {
+                    "nome":
+                        "Principal",
+
+                    "campos":
+                        None,
+                }
+            ]
+
+            for inicio in range(
+                0,
+                len(campos_ativos),
+                2
+            ):
+                par = campos_ativos[
+                    inicio:inicio + 2
+                ]
+
+                modos.append({
+                    "nome":
+                        "Personalizados",
+
+                    "campos":
+                        par,
+                })
+
+            return modos
+
+        def atualizar():
+            cabecalho.clear_widgets()
+            linhas.clear_widgets()
+
+            cadastros = (
+                self.carregar_cadastros()
+            )
+
+            modos = obter_modos()
+
+            if (
+                self.indice_colunas_tabela
+                >= len(modos)
+            ):
+                self.indice_colunas_tabela = 0
+
+            modo = modos[
+                self.indice_colunas_tabela
+            ]
+
+            if modo["campos"] is None:
+                nomes_colunas = [
+                    "NOME",
+                    "COMBO",
+                    "STATUS",
+                ]
+            else:
+                par = modo["campos"]
+
+                nomes_colunas = [
+                    "NOME",
+                    (
+                        par[0].get(
+                            "nome",
+                            ""
+                        )
+                        if len(par) >= 1
+                        else "-"
+                    ),
+                    (
+                        par[1].get(
+                            "nome",
+                            ""
+                        )
+                        if len(par) >= 2
+                        else "-"
+                    ),
+                ]
+
+            for nome_coluna in nomes_colunas:
+                cabecalho.add_widget(
+                    Label(
+                        text=nome_coluna,
+                        font_size="13sp"
+                    )
+                )
+
+            por_pagina = 4
+
+            total_paginas = max(
+                1,
+                (
+                    len(cadastros)
+                    + por_pagina - 1
+                ) // por_pagina
+            )
+
+            if (
+                self.pagina_tabela
+                >= total_paginas
+            ):
+                self.pagina_tabela = (
+                    total_paginas - 1
+                )
+
+            inicio = (
+                self.pagina_tabela
+                * por_pagina
+            )
+
+            fim = inicio + por_pagina
+
+            pagina = cadastros[
+                inicio:fim
+            ]
+
+            if not pagina:
+                linhas.add_widget(
+                    Label(
+                        text="Nenhum registro cadastrado."
+                    )
+                )
+
+            for cadastro in pagina:
+                linha = GridLayout(
+                    cols=3,
+                    spacing=dp(3),
+                    size_hint_y=None,
+                    height=dp(58)
+                )
+
+                nome = cadastro.get(
+                    "nome",
+                    ""
+                )
+
+                nome_btn = Button(
+                    text=nome,
+                    font_size="13sp"
+                )
+
+                nome_btn.bind(
+                    on_release=lambda _b, c=cadastro:
+                    self.visualizar_cadastro(
+                        c,
+                        atualizar
+                    )
+                )
+
+                linha.add_widget(
+                    nome_btn
+                )
+
+                if modo["campos"] is None:
+                    valores = [
+                        cadastro.get(
+                            "grupo",
+                            ""
+                        ),
+                        cadastro.get(
+                            "status",
+                            "Ativo"
+                        ),
+                    ]
+
+                else:
+                    par = modo["campos"]
+
+                    valores = []
+
+                    for posicao in range(2):
+                        if posicao < len(par):
+                            valores.append(
+                                self.valor_campo_tabela(
+                                    cadastro,
+                                    par[posicao]
+                                )
+                            )
+                        else:
+                            valores.append("")
+
+                for valor in valores:
+                    linha.add_widget(
+                        Label(
+                            text=(
+                                str(valor)
+                                if valor
+                                else "-"
+                            ),
+                            font_size="13sp"
+                        )
+                    )
+
+                linhas.add_widget(
+                    linha
+                )
+
+            titulo.text = (
+                "TABELA - "
+                + modo["nome"]
+                + "   "
+                + str(
+                    self.pagina_tabela + 1
+                )
+                + "/"
+                + str(total_paginas)
+            )
+
+        def pagina_anterior(*_):
+            if self.pagina_tabela > 0:
+                self.pagina_tabela -= 1
+                atualizar()
+
+        def pagina_proxima(*_):
+            cadastros = (
+                self.carregar_cadastros()
+            )
+
+            total_paginas = max(
+                1,
+                (
+                    len(cadastros) + 3
+                ) // 4
+            )
+
+            if (
+                self.pagina_tabela + 1
+                < total_paginas
+            ):
+                self.pagina_tabela += 1
+                atualizar()
+
+        def trocar_colunas(*_):
+            modos = obter_modos()
+
+            self.indice_colunas_tabela += 1
+
+            if (
+                self.indice_colunas_tabela
+                >= len(modos)
+            ):
+                self.indice_colunas_tabela = 0
+
+            atualizar()
+
+        anterior.bind(
+            on_release=pagina_anterior
+        )
+
+        proximo.bind(
+            on_release=pagina_proxima
+        )
+
+        colunas.bind(
+            on_release=trocar_colunas
+        )
+
+        fechar.bind(
+            on_release=popup.dismiss
+        )
+
+        atualizar()
+        popup.open()
+
+    def carregar_campos(self):
+        if not self.arquivo_campos.exists():
+            return []
+
+        try:
+            dados = json.loads(
+                self.arquivo_campos.read_text(
+                    encoding="utf-8"
+                )
+            )
+
+            if isinstance(dados, list):
+                return dados
+
+        except Exception:
+            pass
+
+        return []
+
+    def salvar_campos(self, campos):
+        self.arquivo_campos.write_text(
+            json.dumps(
+                campos,
+                ensure_ascii=False,
+                indent=2
+            ),
+            encoding="utf-8"
+        )
+
+    def proximo_id_campo(self):
+        campos = self.carregar_campos()
+
+        ids = []
+
+        for item in campos:
+            try:
+                ids.append(
+                    int(item.get("id", 0))
+                )
+            except Exception:
+                pass
+
+        return max(ids, default=0) + 1
+
+    def abrir_campos_personalizados(self):
+        caixa = BoxLayout(
+            orientation="vertical",
+            spacing=dp(7),
+            padding=dp(10)
+        )
+
+        titulo = Label(
+            text="CAMPOS PERSONALIZADOS",
+            size_hint_y=None,
+            height=dp(38),
+            font_size="17sp"
+        )
+
+        caixa.add_widget(titulo)
+
+        lista = BoxLayout(
+            orientation="vertical",
+            spacing=dp(6)
+        )
+
+        caixa.add_widget(lista)
+
+        navegacao = BoxLayout(
+            spacing=dp(6),
+            size_hint_y=None,
+            height=dp(50)
+        )
+
+        anterior = Button(
+            text="ANTERIOR"
+        )
+
+        novo = Button(
+            text="NOVO CAMPO"
+        )
+
+        proximo = Button(
+            text="PRÓXIMO"
+        )
+
+        navegacao.add_widget(anterior)
+        navegacao.add_widget(novo)
+        navegacao.add_widget(proximo)
+
+        caixa.add_widget(navegacao)
+
+        fechar = Button(
+            text="FECHAR",
+            size_hint_y=None,
+            height=dp(48)
+        )
+
+        caixa.add_widget(fechar)
+
+        popup = Popup(
+            title="Campos personalizados",
+            content=caixa,
+            size_hint=(0.96, 0.92),
+            auto_dismiss=False
+        )
+
+        def atualizar():
+            lista.clear_widgets()
+
+            campos = self.carregar_campos()
+
+            por_pagina = 4
+
+            total_paginas = max(
+                1,
+                (
+                    len(campos)
+                    + por_pagina - 1
+                ) // por_pagina
+            )
+
+            if (
+                self.pagina_campos
+                >= total_paginas
+            ):
+                self.pagina_campos = (
+                    total_paginas - 1
+                )
+
+            inicio = (
+                self.pagina_campos
+                * por_pagina
+            )
+
+            fim = inicio + por_pagina
+
+            pagina = campos[
+                inicio:fim
+            ]
+
+            if not pagina:
+                lista.add_widget(
+                    Label(
+                        text=(
+                            "Nenhum campo personalizado."
+                        )
+                    )
+                )
+
+            for item in pagina:
+                nome = item.get(
+                    "nome",
+                    ""
+                )
+
+                tipo = item.get(
+                    "tipo",
+                    "Texto"
+                )
+
+                status = item.get(
+                    "status",
+                    "Ativo"
+                )
+
+                botao = Button(
+                    text=(
+                        nome
+                        + " - "
+                        + tipo
+                        + "\n"
+                        + status
+                    ),
+                    size_hint_y=None,
+                    height=dp(65)
+                )
+
+                botao.bind(
+                    on_release=lambda _b, i=item:
+                    self.visualizar_campo(
+                        i,
+                        atualizar
+                    )
+                )
+
+                lista.add_widget(
+                    botao
+                )
+
+            titulo.text = (
+                "CAMPOS  "
+                + str(
+                    self.pagina_campos + 1
+                )
+                + "/"
+                + str(total_paginas)
+                + "   Total: "
+                + str(len(campos))
+            )
+
+        def pagina_anterior(*_):
+            if self.pagina_campos > 0:
+                self.pagina_campos -= 1
+                atualizar()
+
+        def pagina_proxima(*_):
+            campos = self.carregar_campos()
+
+            total_paginas = max(
+                1,
+                (
+                    len(campos) + 3
+                ) // 4
+            )
+
+            if (
+                self.pagina_campos + 1
+                < total_paginas
+            ):
+                self.pagina_campos += 1
+                atualizar()
+
+        anterior.bind(
+            on_release=pagina_anterior
+        )
+
+        proximo.bind(
+            on_release=pagina_proxima
+        )
+
+        novo.bind(
+            on_release=lambda *_:
+            self.novo_campo(
+                atualizar
+            )
+        )
+
+        fechar.bind(
+            on_release=popup.dismiss
+        )
+
+        atualizar()
+        popup.open()
+
+    def novo_campo(self, ao_salvar):
+        caixa = BoxLayout(
+            orientation="vertical",
+            spacing=dp(8),
+            padding=dp(10)
+        )
+
+        nome = TextInput(
+            hint_text="Nome do campo",
+            multiline=False,
+            size_hint_y=None,
+            height=dp(50)
+        )
+
+        caixa.add_widget(
+            Label(
+                text="Nome do campo",
+                size_hint_y=None,
+                height=dp(28)
+            )
+        )
+
+        caixa.add_widget(nome)
+
+        caixa.add_widget(
+            Label(
+                text="Tipo do campo",
+                size_hint_y=None,
+                height=dp(28)
+            )
+        )
+
+        tipo = {
+            "valor": "Texto"
+        }
+
+        tipo_label = Label(
+            text="Selecionado: Texto",
+            size_hint_y=None,
+            height=dp(30)
+        )
+
+        linha_tipos = BoxLayout(
+            spacing=dp(6),
+            size_hint_y=None,
+            height=dp(52)
+        )
+
+        texto_btn = Button(
+            text="TEXTO"
+        )
+
+        numero_btn = Button(
+            text="NÚMERO"
+        )
+
+        sim_nao_btn = Button(
+            text="SIM/NÃO"
+        )
+
+        linha_tipos.add_widget(
+            texto_btn
+        )
+
+        linha_tipos.add_widget(
+            numero_btn
+        )
+
+        linha_tipos.add_widget(
+            sim_nao_btn
+        )
+
+        caixa.add_widget(
+            linha_tipos
+        )
+
+        caixa.add_widget(
+            tipo_label
+        )
+
+        aviso = Label(
+            text="",
+            size_hint_y=None,
+            height=dp(35)
+        )
+
+        caixa.add_widget(aviso)
+
+        botoes = BoxLayout(
+            spacing=dp(8),
+            size_hint_y=None,
+            height=dp(52)
+        )
+
+        cancelar = Button(
+            text="CANCELAR"
+        )
+
+        salvar = Button(
+            text="SALVAR"
+        )
+
+        botoes.add_widget(cancelar)
+        botoes.add_widget(salvar)
+
+        caixa.add_widget(botoes)
+
+        popup = Popup(
+            title="Novo Campo",
+            content=caixa,
+            size_hint=(0.92, 0.78),
+            auto_dismiss=False
+        )
+
+        def selecionar_tipo(valor):
+            tipo["valor"] = valor
+
+            tipo_label.text = (
+                "Selecionado: "
+                + valor
+            )
+
+        texto_btn.bind(
+            on_release=lambda *_:
+            selecionar_tipo("Texto")
+        )
+
+        numero_btn.bind(
+            on_release=lambda *_:
+            selecionar_tipo("Número")
+        )
+
+        sim_nao_btn.bind(
+            on_release=lambda *_:
+            selecionar_tipo("Sim/Não")
+        )
+
+        cancelar.bind(
+            on_release=popup.dismiss
+        )
+
+        def confirmar(*_):
+            nome_texto = nome.text.strip()
+
+            if not nome_texto:
+                aviso.text = (
+                    "Digite o nome do campo."
+                )
+                return
+
+            campos = self.carregar_campos()
+
+            nomes_existentes = [
+                item.get(
+                    "nome",
+                    ""
+                ).strip().lower()
+                for item in campos
+            ]
+
+            if (
+                nome_texto.lower()
+                in nomes_existentes
+            ):
+                aviso.text = (
+                    "Esse campo já existe."
+                )
+                return
+
+            campos.append({
+                "id":
+                    self.proximo_id_campo(),
+
+                "nome":
+                    nome_texto,
+
+                "tipo":
+                    tipo["valor"],
+
+                "status":
+                    "Ativo",
+            })
+
+            self.salvar_campos(
+                campos
+            )
+
+            popup.dismiss()
+
+            self.status.text = (
+                "Campo criado: "
+                + nome_texto
+            )
+
+            ao_salvar()
+
+        salvar.bind(
+            on_release=confirmar
+        )
+
+        popup.open()
+
+    def visualizar_campo(
+        self,
+        campo,
+        ao_atualizar
+    ):
+        caixa = BoxLayout(
+            orientation="vertical",
+            spacing=dp(10),
+            padding=dp(12)
+        )
+
+        caixa.add_widget(
+            Label(
+                text=campo.get(
+                    "nome",
+                    ""
+                ),
+                font_size="20sp"
+            )
+        )
+
+        caixa.add_widget(
+            Label(
+                text=(
+                    "Tipo: "
+                    + campo.get(
+                        "tipo",
+                        "Texto"
+                    )
+                )
+            )
+        )
+
+        caixa.add_widget(
+            Label(
+                text=(
+                    "Status: "
+                    + campo.get(
+                        "status",
+                        "Ativo"
+                    )
+                )
+            )
+        )
+
+        botoes = BoxLayout(
+            spacing=dp(8),
+            size_hint_y=None,
+            height=dp(52)
+        )
+
+        status = Button(
+            text=(
+                "DESATIVAR"
+                if campo.get(
+                    "status",
+                    "Ativo"
+                ) == "Ativo"
+                else "ATIVAR"
+            )
+        )
+
+        fechar = Button(
+            text="FECHAR"
+        )
+
+        botoes.add_widget(status)
+        botoes.add_widget(fechar)
+
+        caixa.add_widget(botoes)
+
+        popup = Popup(
+            title="Campo personalizado",
+            content=caixa,
+            size_hint=(0.88, 0.62),
+            auto_dismiss=False
+        )
+
+        def alternar(*_):
+            campos = self.carregar_campos()
+
+            campo_id = campo.get("id")
+
+            for item in campos:
+                if item.get("id") == campo_id:
+                    item["status"] = (
+                        "Inativo"
+                        if item.get(
+                            "status",
+                            "Ativo"
+                        ) == "Ativo"
+                        else "Ativo"
+                    )
+
+                    campo["status"] = (
+                        item["status"]
+                    )
+
+                    break
+
+            self.salvar_campos(
+                campos
+            )
+
+            popup.dismiss()
+            ao_atualizar()
+
+        status.bind(
+            on_release=alternar
+        )
+
+        fechar.bind(
+            on_release=popup.dismiss
+        )
+
+        popup.open()
+
+    def carregar_cadastros(self):
+        if not self.arquivo_cadastros.exists():
+            return []
+
+        try:
+            dados = json.loads(
+                self.arquivo_cadastros.read_text(
+                    encoding="utf-8"
+                )
+            )
+
+            if isinstance(dados, list):
+                return dados
+
+        except Exception:
+            pass
+
+        return []
+
+    def salvar_cadastros(self, cadastros):
+        self.arquivo_cadastros.write_text(
+            json.dumps(
+                cadastros,
+                ensure_ascii=False,
+                indent=2
+            ),
+            encoding="utf-8"
+        )
+
+    def proximo_id_cadastro(self):
+        cadastros = self.carregar_cadastros()
+
+        ids = []
+
+        for item in cadastros:
+            try:
+                ids.append(
+                    int(item.get("id", 0))
+                )
+            except Exception:
+                pass
+
+        return max(ids, default=0) + 1
+
+    def abrir_cadastros(self):
+        caixa = BoxLayout(
+            orientation="vertical",
+            spacing=dp(7),
+            padding=dp(10)
+        )
+
+        titulo = Label(
+            text="CADASTROS",
+            size_hint_y=None,
+            height=dp(35),
+            font_size="18sp"
+        )
+
+        caixa.add_widget(titulo)
+
+        lista = BoxLayout(
+            orientation="vertical",
+            spacing=dp(6)
+        )
+
+        caixa.add_widget(lista)
+
+        navegacao = BoxLayout(
+            spacing=dp(6),
+            size_hint_y=None,
+            height=dp(50)
+        )
+
+        anterior = Button(
+            text="ANTERIOR"
+        )
+
+        novo = Button(
+            text="NOVO"
+        )
+
+        proximo = Button(
+            text="PRÓXIMO"
+        )
+
+        navegacao.add_widget(anterior)
+        navegacao.add_widget(novo)
+        navegacao.add_widget(proximo)
+
+        caixa.add_widget(navegacao)
+
+        fechar = Button(
+            text="FECHAR",
+            size_hint_y=None,
+            height=dp(48)
+        )
+
+        caixa.add_widget(fechar)
+
+        popup = Popup(
+            title="Cadastros",
+            content=caixa,
+            size_hint=(0.96, 0.92),
+            auto_dismiss=False
+        )
+
+        def atualizar():
+            lista.clear_widgets()
+
+            cadastros = self.carregar_cadastros()
+
+            por_pagina = 4
+
+            total_paginas = max(
+                1,
+                (
+                    len(cadastros)
+                    + por_pagina - 1
+                ) // por_pagina
+            )
+
+            if (
+                self.pagina_cadastros
+                >= total_paginas
+            ):
+                self.pagina_cadastros = (
+                    total_paginas - 1
+                )
+
+            inicio = (
+                self.pagina_cadastros
+                * por_pagina
+            )
+
+            fim = inicio + por_pagina
+
+            pagina = cadastros[
+                inicio:fim
+            ]
+
+            if not pagina:
+                lista.add_widget(
+                    Label(
+                        text="Nenhum cadastro."
+                    )
+                )
+
+            for item in pagina:
+                nome = item.get(
+                    "nome",
+                    ""
+                )
+
+                grupo = item.get(
+                    "grupo",
+                    ""
+                )
+
+                status = item.get(
+                    "status",
+                    "Ativo"
+                )
+
+                botao = Button(
+                    text=(
+                        nome
+                        + " - "
+                        + status
+                        + "\n"
+                        + grupo
+                    ),
+                    size_hint_y=None,
+                    height=dp(65)
+                )
+
+                botao.bind(
+                    on_release=lambda _b, i=item:
+                    self.visualizar_cadastro(
+                        i,
+                        atualizar
+                    )
+                )
+
+                lista.add_widget(
+                    botao
+                )
+
+            titulo.text = (
+                "CADASTROS  "
+                + str(
+                    self.pagina_cadastros + 1
+                )
+                + "/"
+                + str(total_paginas)
+                + "   Total: "
+                + str(len(cadastros))
+            )
+
+        def pagina_anterior(*_):
+            if self.pagina_cadastros > 0:
+                self.pagina_cadastros -= 1
+                atualizar()
+
+        def pagina_proxima(*_):
+            cadastros = self.carregar_cadastros()
+
+            total_paginas = max(
+                1,
+                (
+                    len(cadastros) + 3
+                ) // 4
+            )
+
+            if (
+                self.pagina_cadastros + 1
+                < total_paginas
+            ):
+                self.pagina_cadastros += 1
+                atualizar()
+
+        anterior.bind(
+            on_release=pagina_anterior
+        )
+
+        proximo.bind(
+            on_release=pagina_proxima
+        )
+
+        novo.bind(
+            on_release=lambda *_:
+            self.novo_cadastro(
+                atualizar
+            )
+        )
+
+        fechar.bind(
+            on_release=popup.dismiss
+        )
+
+        atualizar()
+        popup.open()
+
+    def escolher_combo(self, ao_escolher):
+        combos = [
+            "Violão",
+            "Guitarra",
+            "Contrabaixo",
+            "Teclado",
+            "Bateria",
+        ]
+
+        caixa = BoxLayout(
+            orientation="vertical",
+            spacing=dp(8),
+            padding=dp(10)
+        )
+
+        titulo = Label(
+            text="ESCOLHER COMBO",
+            size_hint_y=None,
+            height=dp(38),
+            font_size="18sp"
+        )
+
+        caixa.add_widget(titulo)
+
+        grade = GridLayout(
+            cols=2,
+            spacing=dp(8),
+            size_hint_y=None,
+            row_default_height=dp(58),
+            row_force_default=True
+        )
+
+        grade.bind(
+            minimum_height=grade.setter("height")
+        )
+
+        caixa.add_widget(grade)
+
+        cancelar = Button(
+            text="CANCELAR",
+            size_hint_y=None,
+            height=dp(48)
+        )
+
+        caixa.add_widget(cancelar)
+
+        popup = Popup(
+            title="Combo",
+            content=caixa,
+            size_hint=(0.92, 0.78),
+            auto_dismiss=False
+        )
+
+        def selecionar(nome):
+            ao_escolher(nome)
+            popup.dismiss()
+
+        for nome in combos:
+            botao = Button(
+                text=nome
+            )
+
+            botao.bind(
+                on_release=lambda _b, n=nome:
+                selecionar(n)
+            )
+
+            grade.add_widget(botao)
+
+        cancelar.bind(
+            on_release=popup.dismiss
+        )
+
+        popup.open()
+
+    def novo_cadastro(self, ao_salvar):
+        caixa = BoxLayout(
+            orientation="vertical",
+            spacing=dp(6),
+            padding=dp(10)
+        )
+
+        nome = TextInput(
+            hint_text="Nome",
+            multiline=False,
+            size_hint_y=None,
+            height=dp(48)
+        )
+
+        contato = TextInput(
+            hint_text="Contato",
+            multiline=False,
+            size_hint_y=None,
+            height=dp(48)
+        )
+
+        combo = TextInput(
+            hint_text="Escolha o combo",
+            readonly=True,
+            multiline=False,
+            size_hint_y=None,
+            height=dp(48)
+        )
+
+        escolher_combo = Button(
+            text="ESCOLHER COMBO",
+            size_hint_y=None,
+            height=dp(48)
+        )
+
+        observacoes = TextInput(
+            hint_text="Observações",
+            multiline=True,
+            size_hint_y=None,
+            height=dp(90)
+        )
+
+        caixa.add_widget(nome)
+        caixa.add_widget(contato)
+        caixa.add_widget(combo)
+        caixa.add_widget(escolher_combo)
+        caixa.add_widget(observacoes)
+
+        escolher_combo.bind(
+            on_release=lambda *_:
+            self.escolher_combo(
+                lambda valor:
+                setattr(
+                    combo,
+                    "text",
+                    valor
+                )
+            )
+        )
+
+        aviso = Label(
+            text="",
+            size_hint_y=None,
+            height=dp(30)
+        )
+
+        caixa.add_widget(aviso)
+
+        botoes = BoxLayout(
+            spacing=dp(8),
+            size_hint_y=None,
+            height=dp(50)
+        )
+
+        cancelar = Button(
+            text="CANCELAR"
+        )
+
+        salvar = Button(
+            text="SALVAR"
+        )
+
+        botoes.add_widget(cancelar)
+        botoes.add_widget(salvar)
+
+        caixa.add_widget(botoes)
+
+        popup = Popup(
+            title="Novo Cadastro",
+            content=caixa,
+            size_hint=(0.94, 0.88),
+            auto_dismiss=False
+        )
+
+        cancelar.bind(
+            on_release=popup.dismiss
+        )
+
+        def confirmar(*_):
+            nome_texto = nome.text.strip()
+
+            if not nome_texto:
+                aviso.text = (
+                    "Digite o nome."
+                )
+                return
+
+            combo_texto = (
+                combo.text.strip()
+            )
+
+            if not combo_texto:
+                aviso.text = (
+                    "Escolha um combo."
+                )
+                return
+
+            cadastros = (
+                self.carregar_cadastros()
+            )
+
+            cadastros.append({
+                "id":
+                    self.proximo_id_cadastro(),
+
+                "nome":
+                    nome_texto,
+
+                "contato":
+                    contato.text.strip(),
+
+                "grupo":
+                    combo_texto,
+
+                "observacoes":
+                    observacoes.text.strip(),
+
+                "status":
+                    "Ativo",
+
+                "campos":
+                    {},
+            })
+
+            self.salvar_cadastros(
+                cadastros
+            )
+
+            popup.dismiss()
+
+            self.status.text = (
+                "Cadastro salvo: "
+                + nome_texto
+            )
+
+            ao_salvar()
+
+        salvar.bind(
+            on_release=confirmar
+        )
+
+        popup.open()
+
+    def salvar_valor_campo_cadastro(
+        self,
+        cadastro_id,
+        campo,
+        valor
+    ):
+        cadastros = self.carregar_cadastros()
+
+        for item in cadastros:
+            if item.get("id") == cadastro_id:
+                if not isinstance(
+                    item.get("campos"),
+                    dict
+                ):
+                    item["campos"] = {}
+
+                chave = str(
+                    campo.get("id")
+                )
+
+                item["campos"][chave] = valor
+                break
+
+        self.salvar_cadastros(
+            cadastros
+        )
+
+    def editar_campos_cadastro(
+        self,
+        cadastro,
+        ao_atualizar
+    ):
+        campos = [
+            campo
+            for campo in self.carregar_campos()
+            if campo.get(
+                "status",
+                "Ativo"
+            ) == "Ativo"
+        ]
+
+        if not campos:
+            self.status.text = (
+                "Nenhum campo personalizado ativo."
+            )
+            return
+
+        caixa = BoxLayout(
+            orientation="vertical",
+            spacing=dp(7),
+            padding=dp(10)
+        )
+
+        titulo = Label(
+            text="CAMPOS",
+            size_hint_y=None,
+            height=dp(38),
+            font_size="18sp"
+        )
+
+        caixa.add_widget(titulo)
+
+        lista = BoxLayout(
+            orientation="vertical",
+            spacing=dp(6)
+        )
+
+        caixa.add_widget(lista)
+
+        navegacao = BoxLayout(
+            spacing=dp(7),
+            size_hint_y=None,
+            height=dp(48)
+        )
+
+        anterior = Button(
+            text="ANTERIOR"
+        )
+
+        proximo = Button(
+            text="PRÓXIMO"
+        )
+
+        navegacao.add_widget(anterior)
+        navegacao.add_widget(proximo)
+
+        caixa.add_widget(navegacao)
+
+        fechar = Button(
+            text="FECHAR",
+            size_hint_y=None,
+            height=dp(48)
+        )
+
+        caixa.add_widget(fechar)
+
+        popup = Popup(
+            title=cadastro.get(
+                "nome",
+                "Cadastro"
+            ),
+            content=caixa,
+            size_hint=(0.94, 0.90),
+            auto_dismiss=False
+        )
+
+        pagina = {
+            "numero": 0
+        }
+
+        def atualizar():
+            lista.clear_widgets()
+
+            cadastros = self.carregar_cadastros()
+
+            atual = None
+
+            for item in cadastros:
+                if (
+                    item.get("id")
+                    == cadastro.get("id")
+                ):
+                    atual = item
+                    break
+
+            if atual is None:
+                atual = cadastro
+
+            valores = atual.get(
+                "campos",
+                {}
+            )
+
+            if not isinstance(
+                valores,
+                dict
+            ):
+                valores = {}
+
+            por_pagina = 4
+
+            total_paginas = max(
+                1,
+                (
+                    len(campos)
+                    + por_pagina - 1
+                ) // por_pagina
+            )
+
+            if (
+                pagina["numero"]
+                >= total_paginas
+            ):
+                pagina["numero"] = (
+                    total_paginas - 1
+                )
+
+            inicio = (
+                pagina["numero"]
+                * por_pagina
+            )
+
+            fim = inicio + por_pagina
+
+            for campo in campos[
+                inicio:fim
+            ]:
+                chave = str(
+                    campo.get("id")
+                )
+
+                valor = valores.get(
+                    chave,
+                    "Não informado"
+                )
+
+                botao = Button(
+                    text=(
+                        campo.get(
+                            "nome",
+                            ""
+                        )
+                        + " - "
+                        + campo.get(
+                            "tipo",
+                            "Texto"
+                        )
+                        + "\n"
+                        + str(valor)
+                    ),
+                    size_hint_y=None,
+                    height=dp(65)
+                )
+
+                botao.bind(
+                    on_release=lambda _b, c=campo:
+                    self.editar_valor_campo(
+                        cadastro,
+                        c,
+                        atualizar
+                    )
+                )
+
+                lista.add_widget(
+                    botao
+                )
+
+            titulo.text = (
+                "CAMPOS  "
+                + str(
+                    pagina["numero"] + 1
+                )
+                + "/"
+                + str(total_paginas)
+            )
+
+        def pagina_anterior(*_):
+            if pagina["numero"] > 0:
+                pagina["numero"] -= 1
+                atualizar()
+
+        def pagina_proxima(*_):
+            total_paginas = max(
+                1,
+                (
+                    len(campos) + 3
+                ) // 4
+            )
+
+            if (
+                pagina["numero"] + 1
+                < total_paginas
+            ):
+                pagina["numero"] += 1
+                atualizar()
+
+        anterior.bind(
+            on_release=pagina_anterior
+        )
+
+        proximo.bind(
+            on_release=pagina_proxima
+        )
+
+        fechar.bind(
+            on_release=popup.dismiss
+        )
+
+        atualizar()
+        popup.open()
+
+    def editar_valor_campo(
+        self,
+        cadastro,
+        campo,
+        ao_salvar
+    ):
+        tipo = campo.get(
+            "tipo",
+            "Texto"
+        )
+
+        cadastros = self.carregar_cadastros()
+
+        valor_atual = ""
+
+        for item in cadastros:
+            if (
+                item.get("id")
+                == cadastro.get("id")
+            ):
+                campos = item.get(
+                    "campos",
+                    {}
+                )
+
+                valor_atual = campos.get(
+                    str(campo.get("id")),
+                    ""
+                )
+
+                break
+
+        caixa = BoxLayout(
+            orientation="vertical",
+            spacing=dp(10),
+            padding=dp(12)
+        )
+
+        caixa.add_widget(
+            Label(
+                text=campo.get(
+                    "nome",
+                    ""
+                ),
+                size_hint_y=None,
+                height=dp(40),
+                font_size="18sp"
+            )
+        )
+
+        aviso = Label(
+            text="",
+            size_hint_y=None,
+            height=dp(35)
+        )
+
+        popup = Popup(
+            title="Editar campo",
+            content=caixa,
+            size_hint=(0.90, 0.68),
+            auto_dismiss=False
+        )
+
+        if tipo == "Sim/Não":
+            caixa.add_widget(
+                Label(
+                    text=(
+                        "Valor atual: "
+                        + (
+                            str(valor_atual)
+                            if valor_atual
+                            else "Não informado"
+                        )
+                    )
+                )
+            )
+
+            botoes_valor = BoxLayout(
+                spacing=dp(8),
+                size_hint_y=None,
+                height=dp(55)
+            )
+
+            sim = Button(
+                text="SIM"
+            )
+
+            nao = Button(
+                text="NÃO"
+            )
+
+            botoes_valor.add_widget(sim)
+            botoes_valor.add_widget(nao)
+
+            caixa.add_widget(
+                botoes_valor
+            )
+
+            caixa.add_widget(aviso)
+
+            cancelar = Button(
+                text="CANCELAR",
+                size_hint_y=None,
+                height=dp(50)
+            )
+
+            caixa.add_widget(
+                cancelar
+            )
+
+            def salvar_sim_nao(valor):
+                self.salvar_valor_campo_cadastro(
+                    cadastro.get("id"),
+                    campo,
+                    valor
+                )
+
+                popup.dismiss()
+                ao_salvar()
+
+            sim.bind(
+                on_release=lambda *_:
+                salvar_sim_nao("Sim")
+            )
+
+            nao.bind(
+                on_release=lambda *_:
+                salvar_sim_nao("Não")
+            )
+
+            cancelar.bind(
+                on_release=popup.dismiss
+            )
+
+        else:
+            entrada = TextInput(
+                text=str(valor_atual),
+                multiline=False,
+                size_hint_y=None,
+                height=dp(52)
+            )
+
+            caixa.add_widget(
+                entrada
+            )
+
+            caixa.add_widget(
+                aviso
+            )
+
+            botoes = BoxLayout(
+                spacing=dp(8),
+                size_hint_y=None,
+                height=dp(52)
+            )
+
+            cancelar = Button(
+                text="CANCELAR"
+            )
+
+            salvar = Button(
+                text="SALVAR"
+            )
+
+            botoes.add_widget(
+                cancelar
+            )
+
+            botoes.add_widget(
+                salvar
+            )
+
+            caixa.add_widget(
+                botoes
+            )
+
+            cancelar.bind(
+                on_release=popup.dismiss
+            )
+
+            def confirmar(*_):
+                valor = entrada.text.strip()
+
+                if tipo == "Número":
+                    if not valor:
+                        aviso.text = (
+                            "Digite um número."
+                        )
+                        return
+
+                    try:
+                        float(
+                            valor.replace(
+                                ",",
+                                "."
+                            )
+                        )
+                    except Exception:
+                        aviso.text = (
+                            "Valor numérico inválido."
+                        )
+                        return
+
+                self.salvar_valor_campo_cadastro(
+                    cadastro.get("id"),
+                    campo,
+                    valor
+                )
+
+                popup.dismiss()
+                ao_salvar()
+
+            salvar.bind(
+                on_release=confirmar
+            )
+
+        popup.open()
+
+    def visualizar_cadastro(
+        self,
+        cadastro,
+        ao_atualizar
+    ):
+        caixa = BoxLayout(
+            orientation="vertical",
+            spacing=dp(8),
+            padding=dp(12)
+        )
+
+        caixa.add_widget(
+            Label(
+                text=cadastro.get(
+                    "nome",
+                    ""
+                ),
+                size_hint_y=None,
+                height=dp(45),
+                font_size="19sp"
+            )
+        )
+
+        caixa.add_widget(
+            Label(
+                text=(
+                    "Contato: "
+                    + cadastro.get(
+                        "contato",
+                        ""
+                    )
+                ),
+                size_hint_y=None,
+                height=dp(38)
+            )
+        )
+
+        caixa.add_widget(
+            Label(
+                text=(
+                    "Combo: "
+                    + cadastro.get(
+                        "grupo",
+                        ""
+                    )
+                ),
+                size_hint_y=None,
+                height=dp(38)
+            )
+        )
+
+        caixa.add_widget(
+            Label(
+                text=(
+                    "Status: "
+                    + cadastro.get(
+                        "status",
+                        "Ativo"
+                    )
+                ),
+                size_hint_y=None,
+                height=dp(38)
+            )
+        )
+
+        observacoes = cadastro.get(
+            "observacoes",
+            ""
+        )
+
+        if len(observacoes) > 180:
+            observacoes = (
+                observacoes[:177]
+                + "..."
+            )
+
+        caixa.add_widget(
+            Label(
+                text=(
+                    "Observações:\n"
+                    + observacoes
+                )
+            )
+        )
+
+        botoes = BoxLayout(
+            spacing=dp(8),
+            size_hint_y=None,
+            height=dp(50)
+        )
+
+        status = Button(
+            text=(
+                "DESATIVAR"
+                if cadastro.get(
+                    "status",
+                    "Ativo"
+                ) == "Ativo"
+                else "ATIVAR"
+            )
+        )
+
+        campos_btn = Button(
+            text="CAMPOS"
+        )
+
+        fechar = Button(
+            text="FECHAR"
+        )
+
+        botoes.add_widget(status)
+        botoes.add_widget(campos_btn)
+        botoes.add_widget(fechar)
+
+        caixa.add_widget(botoes)
+
+        popup = Popup(
+            title="Detalhes",
+            content=caixa,
+            size_hint=(0.92, 0.80),
+            auto_dismiss=False
+        )
+
+        def alternar(*_):
+            cadastros = (
+                self.carregar_cadastros()
+            )
+
+            cadastro_id = cadastro.get("id")
+
+            for item in cadastros:
+                if item.get("id") == cadastro_id:
+                    item["status"] = (
+                        "Inativo"
+                        if item.get(
+                            "status",
+                            "Ativo"
+                        ) == "Ativo"
+                        else "Ativo"
+                    )
+
+                    cadastro["status"] = (
+                        item["status"]
+                    )
+                    break
+
+            self.salvar_cadastros(
+                cadastros
+            )
+
+            popup.dismiss()
+            ao_atualizar()
+
+        status.bind(
+            on_release=alternar
+        )
+
+        def abrir_campos(*_):
+            popup.dismiss()
+
+            self.editar_campos_cadastro(
+                cadastro,
+                ao_atualizar
+            )
+
+        campos_btn.bind(
+            on_release=abrir_campos
+        )
+
+        fechar.bind(
+            on_release=popup.dismiss
+        )
+
+        popup.open()
+
+
+class AplicativoGerado(App):
+
+    def build(self):
+        self.title = NOME_APP
+        return CadastroPlanilha()
+
+
+if __name__ == "__main__":
+    AplicativoGerado().run()

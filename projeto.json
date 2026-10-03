@@ -1,0 +1,31 @@
+{
+  "nome": "Cadastro Of. Mus. Acordes",
+  "pacote": "com.croger.cadastroacordes",
+  "modelo": "Cadastro/Planilha",
+  "versao_base_funcional": 3,
+  "modulos": [
+    "Cadastros",
+    "Tabelas",
+    "Campos personalizados",
+    "Filtros",
+    "Relatórios",
+    "Importação / Exportação",
+    "Backup / Restauração",
+    "Biblioteca"
+  ],
+  "integracoes_android": [
+    "Contatos",
+    "Telefone",
+    "WhatsApp",
+    "Fotos",
+    "Downloads",
+    "Compartilhamento"
+  ],
+  "categorias": [
+    "Viola",
+    "teclado",
+    "Harmonia"
+  ],
+  "icone": "Logoapk.png",
+  "pdf": "Padrão TRIADES: ReportLab/A4 + gravação direta em Download"
+}

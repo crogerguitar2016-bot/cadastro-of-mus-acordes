@@ -1,0 +1,76 @@
+name: Gerar APK Cadastro Of. Mus. Acordes
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Baixar projeto
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Configurar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Instalar dependências
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git zip unzip wget curl autoconf automake libtool pkg-config build-essential ccache libffi-dev libssl-dev zlib1g-dev libncurses5-dev libncursesw5-dev cmake ninja-build
+
+      - name: Instalar Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Instalar ferramentas Python e preparar ReportLab
+        run: |
+          python -m pip install --upgrade pip setuptools
+          python -m pip install legacy-cgi
+          python -m pip install "cython==0.29.34"
+          python -m pip install reportlab Pillow
+          REPORTLAB_PATH=$(python -c "import reportlab; print(reportlab.__path__[0])")
+          rm -rf ./reportlab
+          cp -r "$REPORTLAB_PATH" ./reportlab
+          find ./reportlab -type f -name "*.so" -delete
+          find ./reportlab -type f -name "*.pyd" -delete
+          echo "ReportLab copiado para o projeto:"
+          ls -ld ./reportlab
+          python -m pip install git+https://github.com/kivy/buildozer.git
+
+      - name: Instalar Android SDK
+        run: |
+          mkdir -p "$HOME/android-sdk/cmdline-tools"
+          cd "$HOME/android-sdk/cmdline-tools"
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
+          unzip -q commandlinetools-linux-13114758_latest.zip
+          mv cmdline-tools latest
+          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$HOME/android-sdk/platform-tools" >> "$GITHUB_PATH"
+          yes | "$HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-36" "build-tools;37.0.0"
+
+      - name: Preparar Python-for-Android
+        run: |
+          git clone --depth 1 --branch develop https://github.com/kivy/python-for-android.git "$HOME/p4a"
+
+      - name: Compilar APK
+        env:
+          ANDROIDSDK: /home/runner/android-sdk
+          ANDROID_HOME: /home/runner/android-sdk
+        run: |
+          buildozer -v android debug
+
+      - name: Publicar APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: APK-Cadastro-Of-Mus-Acordes
+          path: bin/*.apk
+          if-no-files-found: error

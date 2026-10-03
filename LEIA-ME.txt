@@ -1,0 +1,59 @@
+CADASTRO ACORDES - BASE FUNCIONAL V2
+
+Esta versão preserva o ambiente de compilação original e reorganiza o código em:
+- main.py: interface e fluxo do aplicativo
+- data_store.py: cadastros, campos, filtros, relatórios, importação/exportação e backup
+- android_bridge.py: contatos, telefone, WhatsApp, fotos, Downloads e compartilhamento Android
+
+Funções implementadas nesta base:
+- criar, editar, ativar/desativar e excluir cadastros
+- ordenar cadastros por nome
+- criar, renomear, alterar tipo, ativar/desativar e excluir campos personalizados
+- editar valores dos campos personalizados
+- filtros gerais, por combo, status e campo personalizado
+- relatórios
+- exportar CSV, XLSX e PDF
+- importar CSV
+- backup ZIP e restauração com backup de segurança automático
+- escolher contato do celular
+- abrir discador e WhatsApp
+- vincular/abrir foto por seletor Android
+- salvar arquivos em Downloads e compartilhar com outros apps
+- Biblioteca ligada às categorias/pastas definidas no projeto.json
+
+Observação sobre nuvem:
+O botão "CRIAR E COMPARTILHAR / NUVEM" usa o compartilhamento do Android para enviar o backup a Google Drive, e-mail, WhatsApp ou outro app instalado. Sincronização automática com servidor não foi criada porque exigiria escolher um serviço de nuvem/conta e autenticação específicos.
+
+A interface visual definitiva e o ícone serão trabalhados depois desta base funcional.
+
+
+BASE FUNCIONAL V3
+- Nome do APK: Cadastro Of. Mus. Acordes
+- Ícone: Logoapk.png (mesma imagem do projeto TRIADES/Croger Creator)
+- PDF: padrão TRIADES, com ReportLab/A4, marca-d'água e gravação direta em Download/Cadastro Of. Mus. Acordes no Android.
+
+============================================================
+VERSÃO 1.1.0 - INTERFACE MUSICAL V4
+============================================================
+
+Interface inicial refeita em estilo musical escuro/dourado:
+- cabeçalho musical com pauta e teclado desenhados em Kivy;
+- logomarca animada derivada de "Logo efeito.mp4";
+- marca CapCut removida por recorte da área útil da animação;
+- cartões clicáveis: Cadastros, Tabelas, Filtros, Relatórios,
+  Importar/Exportar, Biblioteca, Campos Personalizados,
+  Backup e Restauração;
+- ações rápidas clicáveis: Novo Cadastro, Buscar, Exportar PDF,
+  Exportar Excel e Exportar CSV;
+- resumo dinâmico com total, ativos, inativos e instrumentos;
+- navegação inferior: Início, Cadastros, Relatórios e Mais;
+- ícones gráficos incluídos no próprio APK;
+- mantém o formato de exportação PDF baseado no projeto TRIADES;
+- mantém o ícone do APK Logoapk.png;
+- nome do APK: Cadastro Of. Mus. Acordes.
+
+A animação usada na interface está em:
+assets/logo_animada.gif
+
+O MP4 original não precisa ser carregado pelo APK, evitando dependência
+adicional de player de vídeo e reduzindo o risco de falhas no Android.
