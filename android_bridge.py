@@ -275,8 +275,8 @@ class AndroidBridge:
             return result
         try:
             from jnius import autoclass
-            Build = autoclass("android.os.Build")
-            if Build.VERSION.SDK_INT < 29:
+            BuildVersion = autoclass("android.os.Build$VERSION")
+            if BuildVersion.SDK_INT < 29:
                 result = (None, "Salvar em Downloads requer Android 10 ou superior nesta versão.")
                 if callback:
                     callback(*result)
@@ -339,7 +339,7 @@ class AndroidBridge:
             intent.setType(mime or "application/octet-stream")
             intent.putExtra(Intent.EXTRA_STREAM, uri)
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            self.activity.startActivity(Intent.createChooser(intent, title))
+            self.activity.startActivity(intent)
             return True, "Compartilhamento aberto."
         except Exception as exc:
             return False, str(exc)
