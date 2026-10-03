@@ -99,7 +99,7 @@ class AndroidBridge:
             intent = Intent(Intent.ACTION_VIEW)
             intent.setDataAndType(uri, mime)
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            self.activity.startActivity(Intent.createChooser(intent, "Abrir com"))
+            self.activity.startActivity(intent)
             return True, "Arquivo aberto."
         except Exception as exc:
             return False, str(exc)
